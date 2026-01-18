@@ -300,7 +300,7 @@ export const InventoryPage: React.FC = () => {
                     <div className="md:hidden">
                         {filteredReferences?.map(ref => {
                             const log = history?.find(h => h.reference_code === ref.code);
-                            const stock = log ? log.total : 0;
+                            const stock = log ? (log.total ?? 0) : 0;
                             const g = log ? log.groupings || 0 : 0;
                             const l = log ? log.loose || 0 : 0;
 
