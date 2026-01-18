@@ -131,6 +131,25 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isOnline) syncNow();
     }, [isOnline]);
 
+    // Periodic sync to pull remote changes (every 30 seconds)
+    useEffect(() => {
+        if (!isOnline) return;
+
+        const interval = setInterval(async () => {
+            if (!isSyncing && navigator.onLine) {
+                console.log('Periodic pull sync...');
+                try {
+                    await pullChanges();
+                    setLastSyncTime(new Date());
+                } catch (error) {
+                    console.error('Periodic pull failed', error);
+                }
+            }
+        }, 30000); // Every 30 seconds
+
+        return () => clearInterval(interval);
+    }, [isOnline, isSyncing]);
+
     return (
         <SyncContext.Provider value={{ isOnline, isSyncing, lastSyncTime, syncNow }}>
             {children}
