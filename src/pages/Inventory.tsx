@@ -222,7 +222,7 @@ export const InventoryPage: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="p-3 rounded-xl text-white" style={{ backgroundColor: '#243782' }}>
                         <Package size={28} />
@@ -232,17 +232,17 @@ export const InventoryPage: React.FC = () => {
                         <p className="text-slate-500 text-sm">Gestión de stock y entradas</p>
                     </div>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
+                <div className="flex w-full md:w-auto bg-slate-100 p-1 rounded-lg">
                     <button
                         onClick={() => setViewMode('entry')}
-                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'entry' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'entry' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         style={viewMode === 'entry' ? { backgroundColor: '#243782' } : {}}
                     >
                         <Plus size={16} className="inline mr-1" /> Entrada
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         style={viewMode === 'list' ? { backgroundColor: '#243782' } : {}}
                     >
                         <Layers size={16} className="inline mr-1" /> Consultar
@@ -283,20 +283,52 @@ export const InventoryPage: React.FC = () => {
 
             {viewMode === 'list' ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <h3 className="font-bold text-lg" style={{ color: '#243782' }}>Estado de Referencias</h3>
-                        <div className="relative">
+                        <div className="relative w-full md:w-auto">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                             <input
                                 type="text"
                                 placeholder="Buscar..."
-                                className="pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none w-64"
+                                className="w-full md:w-64 pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    {/* Mobile Cards */}
+                    <div className="md:hidden">
+                        {filteredReferences?.map(ref => {
+                            const log = history?.find(h => h.reference_code === ref.code);
+                            const stock = log ? log.total : 0;
+                            const g = log ? log.groupings || 0 : 0;
+                            const l = log ? log.loose || 0 : 0;
+
+                            return (
+                                <div key={ref.code} className="p-4 border-b border-slate-100 flex items-center justify-between">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-slate-800 text-lg">{ref.code}</span>
+                                            {stock > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">{stock}</span>}
+                                        </div>
+                                        <div className="text-sm text-slate-500 line-clamp-1">{ref.description}</div>
+                                        <div className="text-xs text-slate-400 mt-1">
+                                            UA: {ref.pieces_per_ua} · Coef: {ref.consumption_coef}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setEditingRef({ ref, groupings: g, loose: l })}
+                                        className="p-3 bg-slate-50 text-blue-600 rounded-xl hover:bg-blue-50 transition-colors"
+                                    >
+                                        <Edit2 size={20} />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Desktop Table */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider">

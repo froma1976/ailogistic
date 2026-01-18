@@ -160,7 +160,39 @@ export const RupturesPage: React.FC = () => {
                         className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
-                <div className="overflow-x-auto">
+                {/* Mobile Cards */}
+                <div className="md:hidden">
+                    {ruptureData.map((item, idx) => {
+                        const status = getStatusBadge(item.days);
+                        return (
+                            <div key={idx} className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-slate-800 text-lg">{item.code}</span>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ backgroundColor: status.bg, color: status.text }}>
+                                            {status.label}
+                                        </span>
+                                    </div>
+                                    <div className="text-sm text-slate-500 line-clamp-1">{item.description}</div>
+                                    <div className="text-xs text-slate-400 mt-1">
+                                        Stock: <span className="font-bold text-slate-600">{item.stock}</span> ·
+                                        Días: <span className="font-bold" style={{ color: status.text }}>{item.days > 900 ? '∞' : item.days.toFixed(1)}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5 italic">
+                                        Ruptura: {format(item.date, 'dd/MM/yyyy')}
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-slate-400 font-medium">Consumo</div>
+                                    <div className="text-sm font-bold text-slate-600">{item.consumption.toFixed(1)}/d</div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
                         <thead>
                             <tr className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider">

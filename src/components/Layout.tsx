@@ -34,10 +34,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Mobile Header */}
-                <header className="lg:hidden flex items-center justify-between p-4 bg-white shadow-sm">
-                    <h1 className="text-xl font-bold text-slate-800">FERLOGISTIC</h1>
+                <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between p-4 bg-white shadow-sm">
+                    <h1 className="text-xl font-bold" style={{ color: '#243782' }}>FERLOGISTIC</h1>
                     <button onClick={() => setSidebarOpen(true)} className="p-2 rounded hover:bg-slate-100">
-                        <Menu size={24} />
+                        <Menu size={24} style={{ color: '#243782' }} />
                     </button>
                 </header>
 
