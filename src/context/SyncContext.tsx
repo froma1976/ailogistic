@@ -91,9 +91,29 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: refs } = await supabase.from('part_references').select('*');
         if (refs) await db.part_references.bulkPut(refs);
 
-        // 2. Inventory Logs
-        const { data: logs } = await supabase.from('inventory_log').select('*').limit(1000);
-        if (logs) await db.inventory_log.bulkPut(logs);
+        // 2. Inventory Logs (Sync Today's Data + Cleanup Deletions)
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Fetch remote logs for today
+        const { data: remoteLogs } = await supabase
+            .from('inventory_log')
+            .select('*')
+            .eq('date', todayStr);
+
+        if (remoteLogs) {
+            // Update local with remote
+            await db.inventory_log.bulkPut(remoteLogs);
+
+            // Find local logs for today that are NOT in remote (Deletion Detection)
+            const localLogs = await db.inventory_log.where('date').equals(todayStr).toArray();
+            const remoteIds = new Set((remoteLogs as any[]).map(l => l.id));
+
+            const orphans = localLogs.filter(l => !remoteIds.has(l.id));
+            if (orphans.length > 0) {
+                console.log('Sync found deleted items remotely, removing locally:', orphans.length);
+                await db.inventory_log.bulkDelete(orphans.map(o => o.id));
+            }
+        }
 
         // 3. Production
         const { data: prod } = await supabase.from('production').select('*');
