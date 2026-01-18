@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Menu } from 'lucide-react';
 
@@ -8,6 +9,12 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const navigate = useNavigate();
+
+    // Redirect to home on initial load (reload)
+    useEffect(() => {
+        navigate('/');
+    }, []);
 
     return (
         <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
