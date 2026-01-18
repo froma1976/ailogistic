@@ -5,7 +5,7 @@ import { format, addDays } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { FileDown, Printer, AlertTriangle, ChevronRight, TrendingDown, Clock } from 'lucide-react';
+import { FileDown, Printer, AlertTriangle, TrendingDown, Clock } from 'lucide-react';
 
 export const RupturesPage: React.FC = () => {
     const references = useLiveQuery(() => db.part_references.toArray());

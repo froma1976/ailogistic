@@ -21,7 +21,7 @@ export const ProductionPage: React.FC = () => {
     const references = useLiveQuery(() => db.part_references.toArray());
     const inventoryLogs = useLiveQuery(() => db.inventory_log.toArray());
 
-    const totalWeeklyProduction = Object.values(weekInput).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
+    const totalWeeklyProduction = Object.values(weekInput).reduce((acc: number, curr) => acc + (Number(curr) || 0), 0);
     const dayNames = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
     const dayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -32,8 +32,9 @@ export const ProductionPage: React.FC = () => {
         if (inventoryLogs) {
             const sortedLogs = [...inventoryLogs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
             for (const log of sortedLogs) {
-                if (!latestStockMap.has(log.reference_code)) {
-                    latestStockMap.set(log.reference_code, log.total || 0);
+                const refCode = log.reference_code || '';
+                if (refCode && !latestStockMap.has(refCode)) {
+                    latestStockMap.set(refCode, log.total || 0);
                 }
             }
         }
