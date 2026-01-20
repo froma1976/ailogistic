@@ -15,12 +15,23 @@ export const RupturesPage: React.FC = () => {
     const ruptureData = useMemo(() => {
         if (!references || !logs || !productions) return [];
         const latestProd = productions[0]?.quantity || 0;
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const logsToday = logs.filter(l => l.date === todayStr);
+
+        // Calculate latest stock for each reference
+        const currentStockMap = new Map();
+        const sortedLogs = [...logs].sort((a, b) => {
+            const dateCompare = b.date.localeCompare(a.date);
+            if (dateCompare !== 0) return dateCompare;
+            return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+
+        for (const log of sortedLogs) {
+            if (log.reference_code && !currentStockMap.has(log.reference_code)) {
+                currentStockMap.set(log.reference_code, log.total || 0);
+            }
+        }
 
         return references.map(ref => {
-            const stockLog = logsToday.find(l => l.reference_code === ref.code);
-            const currentStock = stockLog?.total || 0;
+            const currentStock = currentStockMap.get(ref.code) || 0;
             const consumption = latestProd * (ref.consumption_coef || 0);
 
             let daysRemaining = 999;

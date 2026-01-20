@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { format } from 'date-fns';
 import { Trash2, Save, Package, Edit2, X, Search, Plus, Layers } from 'lucide-react';
-import type { PartReference } from '../types/database';
+import type { PartReference, InventoryLog } from '../types/database';
 
 interface EditModalProps {
     reference: PartReference;
@@ -106,8 +106,26 @@ const EditModal: React.FC<EditModalProps> = ({ reference, currentGroupings, curr
 
 export const InventoryPage: React.FC = () => {
     const references = useLiveQuery(() => db.part_references.toArray());
+    const allLogs = useLiveQuery(() => db.inventory_log.toArray());
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const history = useLiveQuery(async () => {
+
+    const currentStockMap = useMemo(() => {
+        if (!allLogs) return new Map<string, InventoryLog>();
+        const map = new Map<string, InventoryLog>();
+        const sorted = [...allLogs].sort((a, b) => {
+            const dateCompare = b.date.localeCompare(a.date);
+            if (dateCompare !== 0) return dateCompare;
+            return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        for (const log of sorted) {
+            if (log.reference_code && !map.has(log.reference_code)) {
+                map.set(log.reference_code, log);
+            }
+        }
+        return map;
+    }, [allLogs]);
+
+    const historyToday = useLiveQuery(async () => {
         const logs = await db.inventory_log.where('date').equals(todayStr).toArray();
         return logs.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     });
@@ -128,8 +146,8 @@ export const InventoryPage: React.FC = () => {
 
     // Stats
     const totalRefs = references?.length || 0;
-    const todayEntries = history?.length || 0;
-    const totalPieces = history?.reduce((sum, h) => sum + (h.total || 0), 0) || 0;
+    const todayEntriesCount = historyToday?.length || 0;
+    const totalPieces = Array.from(currentStockMap.values()).reduce((sum, h) => sum + (h.total || 0), 0) || 0;
 
     useEffect(() => {
         if (selectedRef) {
@@ -266,7 +284,7 @@ export const InventoryPage: React.FC = () => {
                         <Plus size={24} style={{ color: '#388e3c' }} />
                     </div>
                     <div>
-                        <div className="text-3xl font-bold" style={{ color: '#388e3c' }}>{todayEntries}</div>
+                        <div className="text-3xl font-bold" style={{ color: '#388e3c' }}>{todayEntriesCount}</div>
                         <div className="text-sm text-slate-500">Entradas Hoy</div>
                     </div>
                 </div>
@@ -299,7 +317,7 @@ export const InventoryPage: React.FC = () => {
                     {/* Mobile Cards */}
                     <div className="md:hidden">
                         {filteredReferences?.map(ref => {
-                            const log = history?.find(h => h.reference_code === ref.code);
+                            const log = currentStockMap.get(ref.code);
                             const stock = log ? (log.total ?? 0) : 0;
                             const g = log ? log.groupings || 0 : 0;
                             const l = log ? log.loose || 0 : 0;
@@ -315,6 +333,9 @@ export const InventoryPage: React.FC = () => {
                                         <div className="text-xs text-slate-400 mt-1">
                                             UA: {ref.pieces_per_ua} · Coef: {ref.consumption_coef}
                                         </div>
+                                        {log && log.date !== todayStr && (
+                                            <div className="text-[10px] text-orange-500 font-medium">Últ. registro: {format(new Date(log.date), 'dd/MM/yyyy')}</div>
+                                        )}
                                     </div>
                                     <button
                                         onClick={() => setEditingRef({ ref, groupings: g, loose: l })}
@@ -333,15 +354,15 @@ export const InventoryPage: React.FC = () => {
                             <thead>
                                 <tr className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider">
                                     <th className="text-left py-3 px-5 font-semibold">Referencia</th>
-                                    <th className="text-center py-3 px-5 font-semibold">UA</th>
-                                    <th className="text-center py-3 px-5 font-semibold">Coef</th>
-                                    <th className="text-center py-3 px-5 font-semibold">Stock Hoy</th>
+                                    <th className="text-left py-3 px-5 font-semibold">UA / Coef</th>
+                                    <th className="text-center py-3 px-5 font-semibold">Stock Actual</th>
+                                    <th className="text-center py-3 px-5 font-semibold">Últ. Act</th>
                                     <th className="text-center py-3 px-5 font-semibold">Acción</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {filteredReferences?.map(ref => {
-                                    const log = history?.find(h => h.reference_code === ref.code);
+                                    const log = currentStockMap.get(ref.code);
                                     const stock = log ? (log.total ?? 0) : 0;
                                     const g = log ? log.groupings || 0 : 0;
                                     const l = log ? log.loose || 0 : 0;
@@ -352,12 +373,17 @@ export const InventoryPage: React.FC = () => {
                                                 <div className="font-semibold text-slate-800">{ref.code}</div>
                                                 <div className="text-xs text-slate-400 truncate max-w-[200px]">{ref.description}</div>
                                             </td>
-                                            <td className="py-3 px-5 text-center text-slate-600">{ref.pieces_per_ua}</td>
-                                            <td className="py-3 px-5 text-center text-slate-600">{ref.consumption_coef}</td>
+                                            <td className="py-3 px-5">
+                                                <div className="text-sm text-slate-600">UA: {ref.pieces_per_ua}</div>
+                                                <div className="text-xs text-slate-400">Coef: {ref.consumption_coef}</div>
+                                            </td>
                                             <td className="py-3 px-5 text-center">
                                                 <span className={`text-xl font-bold ${stock ? '' : 'text-slate-300'}`} style={stock ? { color: '#243782' } : {}}>
                                                     {stock || '-'}
                                                 </span>
+                                            </td>
+                                            <td className="py-3 px-5 text-center text-xs text-slate-500">
+                                                {log ? format(new Date(log.date), 'dd/MM/yyyy') : '-'}
                                             </td>
                                             <td className="py-3 px-5 text-center">
                                                 <button
@@ -458,7 +484,7 @@ export const InventoryPage: React.FC = () => {
                             </button>
                         </div>
                         <div className="max-h-96 overflow-y-auto">
-                            {history?.map(item => (
+                            {historyToday?.map(item => (
                                 <div key={item.id} className="p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors flex justify-between items-center">
                                     <div>
                                         <div className="font-semibold text-slate-800">{item.reference_code}</div>
@@ -467,7 +493,7 @@ export const InventoryPage: React.FC = () => {
                                     <div className="text-xl font-bold" style={{ color: '#243782' }}>{item.total}</div>
                                 </div>
                             ))}
-                            {!history?.length && (
+                            {!historyToday?.length && (
                                 <div className="text-center py-12 text-slate-400">No hay registros hoy</div>
                             )}
                         </div>

@@ -1,33 +1,52 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Package, TrendingDown, AlertTriangle, RefreshCw, MoreVertical, FileDown, ChevronRight } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import type { InventoryLog } from '../types/database';
 
 export const DashboardPage: React.FC = () => {
     const references = useLiveQuery(() => db.part_references.toArray());
     const production = useLiveQuery(() => db.production.orderBy('date').last());
     const logs = useLiveQuery(() => db.inventory_log.toArray());
 
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const todayLogs = logs?.filter(l => l.date === todayStr) || [];
+    // Calculate current stock (latests entry for each reference)
+    const currentStockMap = useMemo(() => {
+        if (!logs) return new Map<string, InventoryLog>();
+        const map = new Map<string, InventoryLog>();
+        // Sort by date and created_at to get the most recent ones first
+        const sortedLogs = [...logs].sort((l1, l2) => {
+            const dateCompare = l2.date.localeCompare(l1.date);
+            if (dateCompare !== 0) return dateCompare;
+            return (l2.created_at || '').localeCompare(l1.created_at || '');
+        });
+
+        for (const log of sortedLogs) {
+            if (log.reference_code && !map.has(log.reference_code)) {
+                map.set(log.reference_code, log);
+            }
+        }
+        return map;
+    }, [logs]);
+
+    const currentLogs = Array.from(currentStockMap.values());
 
     // Calculate stats
     const totalRefs = references?.length || 0;
-    const lowStockCount = todayLogs.filter(l => (l.total || 0) < 50).length;
-    const criticalCount = todayLogs.filter(l => (l.total || 0) < 20).length;
-    const totalStock = todayLogs.reduce((sum, l) => sum + (l.total || 0), 0);
+    const lowStockCount = currentLogs.filter(l => (l.total || 0) < 50).length;
+    const criticalCount = currentLogs.filter(l => (l.total || 0) < 20).length;
+    const totalStock = currentLogs.reduce((sum, l) => sum + (l.total || 0), 0);
 
     // Get recent inventory items for table
-    const recentItems = todayLogs.slice(0, 6).map(log => {
+    const recentItems = currentLogs.slice(0, 6).map(log => {
         const ref = references?.find(r => r.code === log.reference_code);
         return {
             code: log.reference_code,
             description: ref?.description || '-',
             stock: log.total || 0,
             status: (log.total || 0) < 20 ? 'critical' : (log.total || 0) < 50 ? 'low' : 'ok',
-            lastUpdate: log.created_at ? format(new Date(log.created_at), 'dd/MM/yyyy') : todayStr
+            lastUpdate: log.date ? format(new Date(log.date), 'dd/MM/yyyy') : 'N/A'
         };
     });
 
