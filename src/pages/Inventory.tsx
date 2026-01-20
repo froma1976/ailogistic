@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { format } from 'date-fns';
-import { Trash2, Save, Package, Edit2, X, Search, Plus, Layers } from 'lucide-react';
+import { Trash2, Save, Package, Edit2, X, Search, Plus, Layers, AlertCircle } from 'lucide-react';
 import type { PartReference, InventoryLog } from '../types/database';
 
 interface EditModalProps {
@@ -10,95 +10,144 @@ interface EditModalProps {
     currentGroupings: number;
     currentLoose: number;
     onClose: () => void;
-    onSave: (code: string, coef: number, ua: number, groupings: number, loose: number) => void;
+    onSave: (oldCode: string, newCode: string, coef: number, ua: number, groupings: number, loose: number) => void;
+    onDelete: (code: string) => void;
 }
 
-const EditModal: React.FC<EditModalProps> = ({ reference, currentGroupings, currentLoose, onClose, onSave }) => {
+const EditModal: React.FC<EditModalProps> = ({ reference, currentGroupings, currentLoose, onClose, onSave, onDelete }) => {
+    const [code, setCode] = useState(reference.code);
     const [coef, setCoef] = useState(reference.consumption_coef ?? 0);
     const [ua, setUa] = useState(reference.pieces_per_ua ?? 1);
     const [groupings, setGroupings] = useState(currentGroupings);
     const [loose, setLoose] = useState(currentLoose);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const total = (Number(groupings) || 0) * (Number(ua) || 1) + (Number(loose) || 0);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(reference.code, coef, ua, groupings, loose);
+        onSave(reference.code, code, coef, ua, groupings, loose);
     };
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 overflow-y-auto max-h-[90vh]">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h3 className="text-xl font-bold" style={{ color: '#243782' }}>Editar Referencia</h3>
-                        <p className="text-sm text-slate-500">{reference.code} - {reference.description}</p>
+                        <p className="text-sm text-slate-500">{reference.description}</p>
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full transition-colors">
                         <X size={24} className="text-slate-400" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                {!showDeleteConfirm ? (
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1">Coef. Consumo</label>
+                            <label className="block text-sm font-medium text-slate-600 mb-1">Código de Referencia</label>
                             <input
-                                type="number" step="0.01"
-                                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={coef}
-                                onChange={e => setCoef(Number(e.target.value))}
+                                type="text"
+                                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold"
+                                value={code}
+                                onChange={e => setCode(e.target.value.toUpperCase())}
+                                placeholder="CÓDIGO"
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1">Piezas por UA</label>
-                            <input
-                                type="number"
-                                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={ua}
-                                onChange={e => setUa(Number(e.target.value))}
-                            />
-                        </div>
-                    </div>
 
-                    <div className="border-t border-slate-100 pt-4">
-                        <h4 className="text-sm font-medium text-slate-400 uppercase mb-3">Corrección de Stock</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1">Agrupaciones</label>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Coef. Consumo</label>
                                 <input
-                                    type="number"
-                                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                                    value={groupings}
-                                    onChange={e => setGroupings(Number(e.target.value))}
+                                    type="number" step="0.01"
+                                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={coef}
+                                    onChange={e => setCoef(Number(e.target.value))}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1">Piezas Sueltas</label>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">Piezas por UA</label>
                                 <input
                                     type="number"
-                                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                                    value={loose}
-                                    onChange={e => setLoose(Number(e.target.value))}
+                                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={ua}
+                                    onChange={e => setUa(Number(e.target.value))}
                                 />
                             </div>
                         </div>
 
-                        <div className="mt-4 p-3 rounded-xl flex justify-between items-center" style={{ backgroundColor: '#e3f2fd' }}>
-                            <span className="text-sm font-medium" style={{ color: '#243782' }}>Total Calculado</span>
-                            <span className="text-xl font-bold" style={{ color: '#243782' }}>{total}</span>
+                        <div className="border-t border-slate-100 pt-4">
+                            <h4 className="text-sm font-medium text-slate-400 uppercase mb-3">Corrección de Stock</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Agrupaciones</label>
+                                    <input
+                                        type="number"
+                                        className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                                        value={groupings}
+                                        onChange={e => setGroupings(Number(e.target.value))}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">Piezas Sueltas</label>
+                                    <input
+                                        type="number"
+                                        className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                                        value={loose}
+                                        onChange={e => setLoose(Number(e.target.value))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-4 p-3 rounded-xl flex justify-between items-center" style={{ backgroundColor: '#e3f2fd' }}>
+                                <span className="text-sm font-medium" style={{ color: '#243782' }}>Total Calculado</span>
+                                <span className="text-xl font-bold" style={{ color: '#243782' }}>{total}</span>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 space-y-3">
+                            <div className="flex gap-3">
+                                <button type="button" onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors border border-slate-200">
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="flex-1 py-3 text-white font-bold rounded-xl shadow-lg transition-colors" style={{ backgroundColor: '#243782' }}>
+                                    Guardar
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="w-full py-3 text-red-600 font-bold hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Trash2 size={18} /> Eliminar Referencia
+                            </button>
+                        </div>
+                    </form>
+                ) : (
+                    <div className="text-center space-y-6 py-4">
+                        <div className="mx-auto w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
+                            <AlertCircle size={32} />
+                        </div>
+                        <div>
+                            <h4 className="text-lg font-bold text-slate-800">¿Estás seguro?</h4>
+                            <p className="text-slate-500">Se eliminará la referencia <b>{reference.code}</b> y todo su historial de inventario. Esta acción no se puede deshacer.</p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => onDelete(reference.code)}
+                                className="w-full py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg hover:bg-red-700 transition-colors"
+                            >
+                                Sí, eliminar definitivamente
+                            </button>
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                className="w-full py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors"
+                            >
+                                No, cancelar
+                            </button>
                         </div>
                     </div>
-
-                    <div className="pt-4 flex gap-3">
-                        <button type="button" onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors border border-slate-200">
-                            Cancelar
-                        </button>
-                        <button type="submit" className="flex-1 py-3 text-white font-bold rounded-xl shadow-lg transition-colors" style={{ backgroundColor: '#243782' }}>
-                            Guardar
-                        </button>
-                    </div>
-                </form>
+                )}
             </div>
         </div>
     );
@@ -200,16 +249,46 @@ export const InventoryPage: React.FC = () => {
         }
     };
 
-    const handleEditSave = async (code: string, coef: number, ua: number, groupings: number, loose: number) => {
+    const handleEditSave = async (oldCode: string, newCode: string, coef: number, ua: number, groupings: number, loose: number) => {
         try {
-            const ref = references?.find(r => r.code === code);
-            if (ref) {
+            const ref = references?.find(r => r.code === oldCode);
+            if (!ref) return;
+
+            // Handle code change
+            if (oldCode !== newCode) {
+                // Check if new code exists
+                const conflict = await db.part_references.get(newCode);
+                if (conflict) {
+                    alert('El nuevo código ya existe. Elige otro.');
+                    return;
+                }
+
+                // Create new reference
+                const newRef = { ...ref, code: newCode, consumption_coef: coef, pieces_per_ua: ua };
+                await db.part_references.add(newRef);
+                await db.sync_queue.add({ table: 'part_references', operation: 'INSERT', payload: newRef, status: 'PENDING', created_at: Date.now() });
+
+                // Move all logs to new code
+                const allRefLogs = await db.inventory_log.where('reference_code').equals(oldCode).toArray();
+                for (const log of allRefLogs) {
+                    const updatedLog = { ...log, reference_code: newCode };
+                    await db.inventory_log.put(updatedLog);
+                    await db.sync_queue.add({ table: 'inventory_log', operation: 'UPDATE', payload: updatedLog, status: 'PENDING', created_at: Date.now() });
+                }
+
+                // Delete old reference
+                await db.part_references.delete(oldCode);
+                await db.sync_queue.add({ table: 'part_references', operation: 'DELETE', payload: { code: oldCode }, status: 'PENDING', created_at: Date.now() });
+            } else {
+                // Just update values
                 const updatedRef = { ...ref, consumption_coef: coef, pieces_per_ua: ua };
                 await db.part_references.put(updatedRef);
                 await db.sync_queue.add({ table: 'part_references', operation: 'UPDATE', payload: updatedRef, status: 'PENDING', created_at: Date.now() });
             }
 
-            const log = await db.inventory_log.where('date').equals(todayStr).and(l => l.reference_code === code).first();
+            // Update current log for today
+            const codeToUse = newCode;
+            const log = await db.inventory_log.where('date').equals(todayStr).and(l => l.reference_code === codeToUse).first();
             const newTotal = (groupings * ua) + loose;
 
             if (log) {
@@ -220,7 +299,7 @@ export const InventoryPage: React.FC = () => {
                 const newLog = {
                     id: crypto.randomUUID(),
                     date: todayStr,
-                    reference_code: code,
+                    reference_code: codeToUse,
                     groupings,
                     loose,
                     total: newTotal,
@@ -237,6 +316,26 @@ export const InventoryPage: React.FC = () => {
         }
     };
 
+    const handleDeleteReference = async (code: string) => {
+        try {
+            // Delete all logs for this reference
+            const allRefLogs = await db.inventory_log.where('reference_code').equals(code).toArray();
+            for (const log of allRefLogs) {
+                await db.inventory_log.delete(log.id);
+                await db.sync_queue.add({ table: 'inventory_log', operation: 'DELETE', payload: { id: log.id }, status: 'PENDING', created_at: Date.now() });
+            }
+
+            // Delete the reference
+            await db.part_references.delete(code);
+            await db.sync_queue.add({ table: 'part_references', operation: 'DELETE', payload: { code }, status: 'PENDING', created_at: Date.now() });
+
+            setEditingRef(null);
+        } catch (err) {
+            console.error(err);
+            alert('Error al eliminar');
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -247,7 +346,7 @@ export const InventoryPage: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold" style={{ color: '#243782' }}>Inventario</h1>
-                        <p className="text-slate-500 text-sm">Gestión de stock y entradas</p>
+                        <p className="text-slate-500 text-sm">Gestión de stock e historial</p>
                     </div>
                 </div>
                 <div className="flex w-full md:w-auto bg-slate-100 p-1 rounded-lg">
@@ -294,7 +393,7 @@ export const InventoryPage: React.FC = () => {
                     </div>
                     <div>
                         <div className="text-3xl font-bold" style={{ color: '#f57c00' }}>{totalPieces.toLocaleString()}</div>
-                        <div className="text-sm text-slate-500">Piezas Registradas</div>
+                        <div className="text-sm text-slate-500">Piezas en Stock</div>
                     </div>
                 </div>
             </div>
@@ -508,6 +607,7 @@ export const InventoryPage: React.FC = () => {
                     currentLoose={editingRef.loose}
                     onClose={() => setEditingRef(null)}
                     onSave={handleEditSave}
+                    onDelete={handleDeleteReference}
                 />
             )}
         </div>
