@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { format } from 'date-fns';
-import { Trash2, Save, Package, Edit2, X, Search, Plus, Layers, AlertCircle } from 'lucide-react';
+import { Trash2, Save, Package, Edit2, X, Search, Plus, Layers, AlertCircle, FileUp, Download, CheckCircle2 } from 'lucide-react';
 import type { PartReference, InventoryLog } from '../types/database';
+import * as XLSX from 'xlsx';
 
 interface EditModalProps {
     reference: PartReference;
@@ -153,6 +154,135 @@ const EditModal: React.FC<EditModalProps> = ({ reference, currentGroupings, curr
     );
 };
 
+interface ImportModalProps {
+    onClose: () => void;
+    onImport: (data: any[]) => Promise<void>;
+}
+
+const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
+    const [file, setFile] = useState<File | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [done, setDone] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setFile(e.target.files[0]);
+        }
+    };
+
+    const handleProcess = async () => {
+        if (!file) return;
+        setLoading(true);
+        try {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                await onImport(jsonData);
+                setDone(true);
+                setLoading(false);
+            };
+            reader.readAsArrayBuffer(file);
+        } catch (err) {
+            console.error(err);
+            alert('Error al procesar el archivo');
+            setLoading(false);
+        }
+    };
+
+    const downloadTemplate = () => {
+        const template = [
+            { Referencia: 'REF001', Agrupaciones: 10, Sueltas: 5 },
+            { Referencia: 'REF002', Agrupaciones: 0, Sueltas: 100 },
+        ];
+        const ws = XLSX.utils.json_to_sheet(template);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+        XLSX.writeFile(wb, 'plantilla_inventario.xlsx');
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold" style={{ color: '#243782' }}>Importar Inventario</h3>
+                        <p className="text-sm text-slate-500">Sube un Excel para actualización masiva</p>
+                    </div>
+                    <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full transition-colors">
+                        <X size={24} className="text-slate-400" />
+                    </button>
+                </div>
+
+                {!done ? (
+                    <div className="space-y-6">
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className="border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all"
+                        >
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
+                            <div className="p-4 bg-blue-100 text-blue-600 rounded-full">
+                                <FileUp size={32} />
+                            </div>
+                            <div className="text-center">
+                                <p className="font-bold text-slate-700">{file ? file.name : 'Seleccionar Archivo Excel'}</p>
+                                <p className="text-xs text-slate-400">Haz clic para buscar en tu ordenador</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                                <Download size={16} /> Formato esperado
+                            </h4>
+                            <p className="text-xs text-slate-500 mb-3">El Excel debe tener las columnas: <b>Referencia</b>, <b>Agrupaciones</b> y <b>Sueltas</b>.</p>
+                            <button
+                                onClick={downloadTemplate}
+                                className="text-xs font-bold text-blue-600 hover:underline"
+                            >
+                                Descargar plantilla de ejemplo
+                            </button>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-colors border border-slate-200">
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleProcess}
+                                disabled={!file || loading}
+                                className="flex-1 py-3 text-white font-bold rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                style={{ backgroundColor: '#243782' }}
+                            >
+                                {loading ? 'Procesando...' : 'Procesar Archivo'}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center space-y-6 py-4">
+                        <div className="mx-auto w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center animate-bounce">
+                            <CheckCircle2 size={32} />
+                        </div>
+                        <div>
+                            <h4 className="text-lg font-bold text-slate-800">¡Importación Exitosa!</h4>
+                            <p className="text-slate-500">Se ha actualizado el inventario con los datos del archivo.</p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="w-full py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 transition-colors"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export const InventoryPage: React.FC = () => {
     const references = useLiveQuery(() => db.part_references.toArray());
     const allLogs = useLiveQuery(() => db.inventory_log.toArray());
@@ -186,6 +316,7 @@ export const InventoryPage: React.FC = () => {
     const [total, setTotal] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [editingRef, setEditingRef] = useState<{ ref: PartReference, groupings: number, loose: number } | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const selectedRef = references?.find(r => r.code === selectedCode);
     const filteredReferences = references?.filter(ref =>
@@ -336,6 +467,49 @@ export const InventoryPage: React.FC = () => {
         }
     };
 
+    const handleImportExcel = async (data: any[]) => {
+        if (!references) return;
+
+        for (const row of data) {
+            const code = String(row.Referencia || row.Codigo || row.Code || '').trim().toUpperCase();
+            if (!code) continue;
+
+            const ref = references.find(r => r.code === code);
+            if (!ref) {
+                console.warn('Referencia no encontrada:', code);
+                continue;
+            }
+
+            const groupings = Number(row.Agrupaciones || row.UA || row.Pallets || 0);
+            const loose = Number(row.Sueltas || row.Loose || row.Unidades || 0);
+            const total = groupings * (ref.pieces_per_ua || 1) + loose;
+
+            // Create/Update log for today
+            const existing = await db.inventory_log
+                .where('date').equals(todayStr)
+                .and(item => item.reference_code === code)
+                .first();
+
+            if (existing) {
+                const updated = { ...existing, groupings, loose, total };
+                await db.inventory_log.put(updated);
+                await db.sync_queue.add({ table: 'inventory_log', operation: 'UPDATE', payload: updated, status: 'PENDING', created_at: Date.now() });
+            } else {
+                const newLog = {
+                    id: crypto.randomUUID(),
+                    date: todayStr,
+                    reference_code: code,
+                    groupings,
+                    loose,
+                    total,
+                    created_at: new Date().toISOString()
+                };
+                await db.inventory_log.add(newLog);
+                await db.sync_queue.add({ table: 'inventory_log', operation: 'INSERT', payload: newLog, status: 'PENDING', created_at: Date.now() });
+            }
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -349,21 +523,29 @@ export const InventoryPage: React.FC = () => {
                         <p className="text-slate-500 text-sm">Gestión de stock e historial</p>
                     </div>
                 </div>
-                <div className="flex w-full md:w-auto bg-slate-100 p-1 rounded-lg">
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setViewMode('entry')}
-                        className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'entry' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        style={viewMode === 'entry' ? { backgroundColor: '#243782' } : {}}
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2 transition-all shadow-sm"
                     >
-                        <Plus size={16} className="inline mr-1" /> Entrada
+                        <FileUp size={18} /> Importar Excel
                     </button>
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        style={viewMode === 'list' ? { backgroundColor: '#243782' } : {}}
-                    >
-                        <Layers size={16} className="inline mr-1" /> Consultar
-                    </button>
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button
+                            onClick={() => setViewMode('entry')}
+                            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'entry' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            style={viewMode === 'entry' ? { backgroundColor: '#243782' } : {}}
+                        >
+                            <Plus size={16} className="inline mr-1" /> Entrada
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            style={viewMode === 'list' ? { backgroundColor: '#243782' } : {}}
+                        >
+                            <Layers size={16} className="inline mr-1" /> Consultar
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -598,6 +780,13 @@ export const InventoryPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {isImportModalOpen && (
+                <ImportModal
+                    onClose={() => setIsImportModalOpen(false)}
+                    onImport={handleImportExcel}
+                />
             )}
 
             {editingRef && (
