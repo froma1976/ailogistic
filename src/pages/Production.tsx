@@ -79,12 +79,21 @@ export const ProductionPage: React.FC = () => {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!quantity) return;
+        if (!quantity || !date) return;
 
         try {
+            const prodDate = date;
+            const newQty = Number(quantity);
+
+            // 1. Get previous production to calculate difference
+            const existingProd = await db.production.get(prodDate);
+            const oldQty = existingProd?.quantity || 0;
+            const diffQty = newQty - oldQty;
+
+            // 2. Save production record
             const prod = {
-                date,
-                quantity: Number(quantity),
+                date: prodDate,
+                quantity: newQty,
                 updated_at: new Date().toISOString()
             };
 
@@ -97,10 +106,84 @@ export const ProductionPage: React.FC = () => {
                 created_at: Date.now()
             });
 
+            // 3. DISCOUNT FROM INVENTORY if there is a change in quantity
+            if (diffQty !== 0) {
+                const refs = await db.part_references.toArray();
+
+                for (const ref of refs) {
+                    const coef = ref.consumption_coef || 0;
+                    if (coef <= 0) continue;
+
+                    const consumptionChange = diffQty * coef;
+
+                    // Find inventory logs for this reference for this date or later
+                    const logsToUpdate = await db.inventory_log
+                        .where('reference_code').equals(ref.code)
+                        .toArray();
+
+                    const filteredLogs = logsToUpdate.filter(l => l.date >= prodDate);
+
+                    if (filteredLogs.length > 0) {
+                        // Update all existing logs from that date onwards
+                        for (const log of filteredLogs) {
+                            const newTotal = (log.total || 0) - consumptionChange;
+                            const ua = ref.pieces_per_ua || 1;
+                            const updatedLog = {
+                                ...log,
+                                total: newTotal,
+                                groupings: Math.floor(newTotal / ua),
+                                loose: Math.round(newTotal % ua),
+                                created_at: new Date().toISOString()
+                            };
+                            await db.inventory_log.put(updatedLog);
+                            await db.sync_queue.add({
+                                table: 'inventory_log',
+                                operation: 'UPDATE',
+                                payload: updatedLog,
+                                status: 'PENDING',
+                                created_at: Date.now()
+                            });
+                        }
+                    } else {
+                        // If no logs exist from that date onwards, create a new one based on latest known stock
+                        const allLogsForRef = await db.inventory_log
+                            .where('reference_code').equals(ref.code)
+                            .toArray();
+
+                        const previousLogs = allLogsForRef
+                            .filter(l => l.date < prodDate)
+                            .sort((a, b) => b.date.localeCompare(a.date));
+
+                        const baseStock = previousLogs.length > 0 ? (previousLogs[0].total || 0) : 0;
+                        const newTotal = baseStock - (newQty * coef);
+
+                        const ua = ref.pieces_per_ua || 1;
+                        const newLog = {
+                            id: crypto.randomUUID(),
+                            date: prodDate,
+                            reference_code: ref.code,
+                            total: newTotal,
+                            groupings: Math.floor(newTotal / ua),
+                            loose: Math.round(newTotal % ua),
+                            created_at: new Date().toISOString()
+                        };
+                        await db.inventory_log.add(newLog);
+                        await db.sync_queue.add({
+                            table: 'inventory_log',
+                            operation: 'INSERT',
+                            payload: newLog,
+                            status: 'PENDING',
+                            created_at: Date.now()
+                        });
+                    }
+                }
+            }
+
             setQuantity('');
+            alert('Producción guardada e inventario actualizado');
         } catch (err) {
             console.error(err);
-            alert('Error');
+            alert('Error al guardar la producción');
         }
     };
 
