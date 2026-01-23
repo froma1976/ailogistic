@@ -11,7 +11,21 @@ export const ProductionPage: React.FC = () => {
     // --- DAILY ENTRY STATE ---
     const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [quantity, setQuantity] = useState<number | ''>('');
+    const [isEditing, setIsEditing] = useState(false);
     const history = useLiveQuery(() => db.production.orderBy('date').reverse().toArray());
+
+    const handleEdit = (item: any) => {
+        setDate(item.date);
+        setQuantity(item.quantity ?? '');
+        setIsEditing(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setDate(format(new Date(), 'yyyy-MM-dd'));
+        setQuantity('');
+        setIsEditing(false);
+    };
 
     // --- SIMULATION STATE ---
     const [weekInput, setWeekInput] = useState<{ [key: string]: number | '' }>({
@@ -180,7 +194,8 @@ export const ProductionPage: React.FC = () => {
             }
 
             setQuantity('');
-            alert('Producción guardada e inventario actualizado');
+            setIsEditing(false);
+            alert(isEditing ? 'Producción actualizada e inventario ajustado' : 'Producción guardada e inventario actualizado');
         } catch (err) {
             console.error(err);
             alert('Error al guardar la producción');
@@ -238,8 +253,17 @@ export const ProductionPage: React.FC = () => {
             {viewMode === 'daily' ? (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Form Card */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                        <h3 className="font-bold text-lg mb-6" style={{ color: '#243782' }}>Nuevo Registro</h3>
+                    <div className={`bg-white rounded-2xl shadow-sm border ${isEditing ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-100'} p-6 transition-all`}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-bold text-lg" style={{ color: '#243782' }}>
+                                {isEditing ? 'Editar Registro' : 'Nuevo Registro'}
+                            </h3>
+                            {isEditing && (
+                                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                                    Modo Edición
+                                </span>
+                            )}
+                        </div>
                         <form onSubmit={handleSave} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-600 mb-2">Fecha Producción</label>
@@ -247,11 +271,13 @@ export const ProductionPage: React.FC = () => {
                                     <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                                     <input
                                         type="date"
-                                        className="w-full pl-12 p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                                        className={`w-full pl-12 p-3 rounded-xl border ${isEditing ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200'} focus:ring-2 focus:ring-blue-500 outline-none font-medium`}
                                         value={date}
                                         onChange={e => setDate(e.target.value)}
+                                        disabled={isEditing}
                                     />
                                 </div>
+                                {isEditing && <p className="text-[10px] text-slate-400 mt-1">La fecha no es editable en este modo.</p>}
                             </div>
 
                             <div>
@@ -264,17 +290,29 @@ export const ProductionPage: React.FC = () => {
                                         value={quantity}
                                         onChange={e => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
                                         placeholder="0"
+                                        autoFocus={isEditing}
                                     />
                                 </div>
                             </div>
 
-                            <button
-                                type="submit"
-                                className="w-full py-3 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 hover:opacity-90"
-                                style={{ backgroundColor: '#243782' }}
-                            >
-                                <Save size={20} /> GUARDAR
-                            </button>
+                            <div className="flex gap-3 pt-2">
+                                {isEditing && (
+                                    <button
+                                        type="button"
+                                        onClick={handleCancelEdit}
+                                        className="flex-1 py-3 text-slate-500 font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-all"
+                                    >
+                                        CANCELAR
+                                    </button>
+                                )}
+                                <button
+                                    type="submit"
+                                    className={`${isEditing ? 'flex-[2]' : 'w-full'} py-3 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 hover:opacity-90`}
+                                    style={{ backgroundColor: '#243782' }}
+                                >
+                                    <Save size={20} /> {isEditing ? 'ACTUALIZAR' : 'GUARDAR'}
+                                </button>
+                            </div>
                         </form>
                     </div>
 
@@ -305,8 +343,8 @@ export const ProductionPage: React.FC = () => {
                                             </td>
                                             <td className="py-3 px-5">
                                                 <button
-                                                    onClick={() => { setDate(item.date); setQuantity(item.quantity ?? ''); }}
-                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                    onClick={() => handleEdit(item)}
+                                                    className={`p-2 rounded-lg transition-all ${date === item.date && isEditing ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                                                     title="Editar"
                                                 >
                                                     <Edit2 size={16} />
